@@ -24,6 +24,7 @@ import qualified LRUBoundedMap_LinkedListHashMap as LBM_LLHM
 import qualified LRUBoundedMap_DoubleMapBTree    as LBM_DMBT
 import qualified LRUBoundedMap_CustomHAMT        as LBM_CHAMT
 import qualified LRUBoundedMap_CustomHashedTrie  as LBM_CHT
+import qualified PSQueues_LRUCache               as PSQ_LRU
 
 import FisherYatesShuffle
 
@@ -70,6 +71,8 @@ main = do
         mkLBM_CHAMT1k = foldl' (\r (k, v) -> fst $ LBM_CHAMT.insert k v r) (LBM_CHAMT.empty 1000)
         mkLBM_CHT5k   = foldl' (\r (k, v) -> fst $ LBM_CHT.insert k v r)   (LBM_CHT.empty   5000)
         mkLBM_CHT1k   = foldl' (\r (k, v) -> fst $ LBM_CHT.insert k v r)   (LBM_CHT.empty   1000)
+        mkPSQ_LRU5k   = foldl' (\r (k, v) -> fst $ PSQ_LRU.insert k v r)   (PSQ_LRU.empty   5000)
+        mkPSQ_LRU1k   = foldl' (\r (k, v) -> fst $ PSQ_LRU.insert k v r)   (PSQ_LRU.empty   1000)
         lDMS          = mkDMS         kvL
         lDHMS         = mkDHMS        kvL
         lDIMS         = mkDIMS        kvL
@@ -81,6 +84,8 @@ main = do
         lLBM_CHAMT1k  = mkLBM_CHAMT1k kvL
         lLBM_CHT5k    = mkLBM_CHT5k   kvL
         lLBM_CHT1k    = mkLBM_CHT1k   kvL
+        lPSQ_LRU5k    = mkPSQ_LRU5k   kvL
+        lPSQ_LRU1k    = mkPSQ_LRU1k   kvL
     -- Some basic tests for the LRU CT map
     case LBM_CHT.valid lLBM_CHT5k of
         Just err -> (putStrLn $ "lLBM_CHT5k.valid: " ++ err) >> exitFailure
@@ -148,6 +153,8 @@ main = do
       (lLBM_CHAMT1k ) `deepseq`
       (lLBM_CHT5k   ) `deepseq`
       (lLBM_CHT1k   ) `deepseq`
+      (lPSQ_LRU5k   ) `deepseq`
+      (lPSQ_LRU1k   ) `deepseq`
       -- Run criterion benchmarks
       defaultMainWith
         criterionCfg
@@ -170,6 +177,8 @@ main = do
           , bench "LBM_DoubleMapBTree (lim 1k)"      . nf (mkLBM_DMBT1k)  $ kvL
           , bench "LBM_CustomHashedTrie (lim 5k)"    . nf (mkLBM_CHT5k)   $ kvL
           , bench "LBM_CustomHashedTrie (lim 1k)"    . nf (mkLBM_CHT1k)   $ kvL
+          , bench "PSQ_LRU (lim 5k)"                 . nf (mkPSQ_LRU5k)   $ kvL
+          , bench "PSQ_LRU (lim 1k)"                 . nf (mkPSQ_LRU1k)   $ kvL
           ]
         , bgroup "delete (w/o LRU upd)"
           [
@@ -196,6 +205,10 @@ main = do
               (foldl' (\r k -> fst $ LBM_CHT.delete k r) lLBM_CHT5k) $ keysLShuffled
           , bench "LBM_CustomHashedTrie (lim 1k)" . nf
               (foldl' (\r k -> fst $ LBM_CHT.delete k r) lLBM_CHT1k) $ keysLShuffled
+          , bench "PSQ_LRU (lim 5k)" . nf
+              (foldl' (\r k -> fst $ PSQ_LRU.delete k r) lPSQ_LRU5k) $ keysLShuffled
+          , bench "PSQ_LRU (lim 1k)" . nf
+              (foldl' (\r k -> fst $ PSQ_LRU.delete k r) lPSQ_LRU1k) $ keysLShuffled
           ]
         , bgroup "lookup (w/o LRU upd) "
           [
@@ -214,6 +227,12 @@ main = do
           , bench "LBM_CustomHashedTrie (lim 1k)" . nf
               (foldl' (\r k -> (r +)
                   . fromMaybe 0 . LBM_CHT.lookupNoLRU k $ lLBM_CHT1k) 0) $ keysLShuffled
+          , bench "PSQ_LRU (lim 5k)" . nf
+              (foldl' (\r k -> (r +)
+                  . fromMaybe 0 . PSQ_LRU.lookupNoLRU k $ lPSQ_LRU5k) 0) $ keysLShuffled
+          , bench "PSQ_LRU (lim 1k)" . nf
+              (foldl' (\r k -> (r +)
+                  . fromMaybe 0 . PSQ_LRU.lookupNoLRU k $ lPSQ_LRU1k) 0) $ keysLShuffled
           ]
           -- If we lookup / delete in the same / reverse order we inserted, we hit a
           -- special case with the LLHM where the key to update is always at the end /
@@ -234,6 +253,8 @@ main = do
         --, lkBench "LBM_CustomHAMT (lim 1k)"        (LBM_CHAMT.lookup) lLBM_CHAMT1k keysLShuffled
           , lkBench "LBM_CustomHashedTrie (lim 5k)"  (LBM_CHT.lookup)   lLBM_CHT5k   keysLShuffled
           , lkBench "LBM_CustomHashedTrie (lim 1k)"  (LBM_CHT.lookup)   lLBM_CHT1k   keysLShuffled
+          , lkBench "PSQ_LRU (lim 5k)"  (PSQ_LRU.lookup)   lPSQ_LRU5k   keysLShuffled
+          , lkBench "PSQ_LRU (lim 1k)"  (PSQ_LRU.lookup)   lPSQ_LRU1k   keysLShuffled
           ]
         ]
     where {-# INLINE lkBench #-}
