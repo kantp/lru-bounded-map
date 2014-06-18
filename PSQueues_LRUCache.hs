@@ -45,12 +45,13 @@ empty limit
 {-# INLINEABLE insert #-}
 insert
     :: (Hashable k, Ord k) => k -> v -> Map k v -> (Map k v, Maybe (k, v))
-insert k x m = case HashPSQ.insertView k (mTick m) x (mQueue m) of
-    (Just (_, x'), q) -> (increaseTick m {mQueue = q}, Just (k, x'))
-    (Nothing,      q) -> popOldestIfAtSizeLimit $ increaseTick m
-        { mQueue = q
-        , mSize  = mSize m + 1
-        }
+insert k x m =
+    case HashPSQ.unsafeInsertIncreasePriorityView k (mTick m) x (mQueue m) of
+        (Just (_, x'), q) -> (increaseTick m {mQueue = q}, Just (k, x'))
+        (Nothing,      q) -> popOldestIfAtSizeLimit $ increaseTick m
+            { mQueue = q
+            , mSize  = mSize m + 1
+            }
 
 {-# INLINEABLE increaseTick #-}
 increaseTick :: Map k v -> Map k v
@@ -70,11 +71,10 @@ popOldestIfAtSizeLimit m
 {-# INLINEABLE lookup #-}
 lookup
     :: (Hashable k, Ord k) => k -> Map k v -> (Map k v, Maybe v)
-lookup k m = case HashPSQ.alter f k (mQueue m) of
-    (mbX, q) -> (increaseTick m {mQueue = q}, mbX)
-  where
-    f Nothing       = (Nothing, Nothing)
-    f (Just (_, x)) = (Just x,  Just (mTick m, x))
+lookup k m@(Map _ t _ q) =
+    case HashPSQ.unsafeLookupIncreasePriority k t q of
+        (Nothing,     q') -> (increaseTick m {mQueue = q'}, Nothing)
+        (Just (_, x), q') -> (increaseTick m {mQueue = q'}, Just x)
 
 {-# INLINEABLE lookupNoLRU #-}
 lookupNoLRU
