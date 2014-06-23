@@ -45,36 +45,58 @@ empty limit
 {-# INLINEABLE insert #-}
 insert
     :: (Hashable k, Ord k) => k -> v -> Map k v -> (Map k v, Maybe (k, v))
-insert k x m =
-    case HashPSQ.unsafeInsertIncreasePriorityView k (mTick m) x (mQueue m) of
-        (Just (_, x'), q) -> (increaseTick m {mQueue = q}, Just (k, x'))
-        (Nothing,      q) -> popOldestIfAtSizeLimit $ increaseTick m
-            { mQueue = q
-            , mSize  = mSize m + 1
-            }
+insert k x m@(Map _ t s q) =
+    case HashPSQ.insertView k t x q of
+        (Just (_, x'), q') -> (increaseTick m {mQueue = q'}, Just (k, x'))
+        (Nothing,      q') -> popOldestIfAtSizeLimit $
+            compactIfAtTickLimit $ increaseTick m
+                { mQueue = q'
+                , mSize  = s + 1
+                }
 
 {-# INLINEABLE increaseTick #-}
 increaseTick :: Map k v -> Map k v
 increaseTick m = m {mTick = mTick m + 1}
+
+{-# INLINE compactIfAtTickLimit #-}
+compactIfAtTickLimit :: (Hashable k, Ord k) => Map k v -> Map k v
+compactIfAtTickLimit m
+    | mTick m >= maxBound = compactTicks m
+    | otherwise           = m
+
+compactTicks :: (Hashable k, Ord k) => Map k v -> Map k v
+compactTicks m = go m . empty $ mLimit m
+  where
+    go msrc mdst =
+        let (msrc', mkv) = popOldest msrc
+        in  case mkv of
+                Just (k, v) -> go msrc' . fst $ insert k v mdst
+                Nothing     -> mdst
+
+popOldest
+    :: (Hashable k, Ord k) => Map k v -> (Map k v, Maybe (k, v))
+popOldest m = case HashPSQ.minView (mQueue m) of
+    Nothing           -> (m, Nothing)
+    Just (k, _, x, q) ->
+        let m' = m {mSize  = mSize m - 1, mQueue = q}
+        in  (m', Just (k, x))
 
 {-# INLINEABLE popOldestIfAtSizeLimit #-}
 popOldestIfAtSizeLimit
     :: (Hashable k, Ord k) => Map k v -> (Map k v, Maybe (k, v))
 popOldestIfAtSizeLimit m
     | mSize m <= mLimit m = (m, Nothing)
-    | otherwise           = case HashPSQ.minView (mQueue m) of
-        Nothing           -> (m, Nothing)
-        Just (k, _, x, q) ->
-            let m' = m {mSize  = mSize m - 1, mQueue = q}
-            in  (m', Just (k, x))
+    | otherwise           = popOldest m
 
 {-# INLINEABLE lookup #-}
 lookup
     :: (Hashable k, Ord k) => k -> Map k v -> (Map k v, Maybe v)
 lookup k m@(Map _ t _ q) =
-    case HashPSQ.unsafeLookupIncreasePriority k t q of
-        (Nothing,     q') -> (increaseTick m {mQueue = q'}, Nothing)
-        (Just (_, x), q') -> (increaseTick m {mQueue = q'}, Just x)
+    case HashPSQ.alter f k q of
+        (mbX, q') -> (compactIfAtTickLimit (increaseTick m {mQueue = q'}), mbX)
+  where
+    f Nothing       = (Nothing, Nothing)
+    f (Just (_, x)) = (Just x,  Just (t, x))
 
 {-# INLINEABLE lookupNoLRU #-}
 lookupNoLRU
