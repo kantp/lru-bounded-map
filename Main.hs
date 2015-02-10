@@ -3,42 +3,42 @@
 
 module Main where
 
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as B8
-import Data.List
+import qualified Data.ByteString                 as B
+import qualified Data.ByteString.Char8           as B8
+import           Data.List
 -- import Data.Function
-import Data.Maybe
-import Data.Hashable
-import Control.Applicative
-import Control.Monad
-import Control.DeepSeq
-import Criterion.Main
-import Criterion.Config
-import System.Exit
-import System.Random
+import           Control.Applicative
+import           Control.DeepSeq
+import           Control.Monad
+import           Criterion.Main
+import           Criterion.Types
+import           Data.Hashable
+import           Data.Maybe
+import           System.Exit
+import           System.Random
 
-import qualified Data.Map.Strict as M
-import qualified Data.HashMap.Strict as HM
-import qualified Data.IntMap.Strict as IM
-import qualified LRUBoundedMap_LinkedListHashMap as LBM_LLHM
-import qualified LRUBoundedMap_DoubleMapBTree    as LBM_DMBT
+import qualified Data.HashMap.Strict             as HM
+import qualified Data.IntMap.Strict              as IM
+import qualified Data.Map.Strict                 as M
 import qualified LRUBoundedMap_CustomHAMT        as LBM_CHAMT
 import qualified LRUBoundedMap_CustomHashedTrie  as LBM_CHT
+import qualified LRUBoundedMap_DoubleMapBTree    as LBM_DMBT
+import qualified LRUBoundedMap_LinkedListHashMap as LBM_LLHM
 import qualified PSQueues_LRUCache               as PSQ_LRU
 
-import FisherYatesShuffle
+import           FisherYatesShuffle
 
 criterionCfg :: Config
-criterionCfg = defaultConfig { cfgPerformGC = ljust True
-                             , cfgReport    = ljust "./report.html"
-                             , cfgSamples   = ljust 100
+criterionCfg = defaultConfig { forceGC    = True
+                             , reportFile = Just "./report.html"
+                             , resamples  = 100
                              }
 
 main :: IO ()
 main = do
     -- Load test set of representative keys
     keysL' <- B8.lines <$> B.readFile "keys.txt"
-    
+
     let -- Insert a known hash collision
         keysL         = "479199" : "662782" : drop 2 keysL'
         -- Shuffled version so we don't lookup / delete in the same order we inserted
@@ -158,7 +158,6 @@ main = do
       -- Run criterion benchmarks
       defaultMainWith
         criterionCfg
-        (return ())
         [
           bgroup "insert (w/o LRU upd)"
           [
